@@ -1,15 +1,16 @@
 #include <cuda_runtime.h>
+#include <cooperative_groups.h>
 #include <stdio.h>
-#include <limits.h>
+#include <unistd.h>
 
 #define HISTOGRAM_SIZE 32  // clock values are 32 bit
 #define THREADS_PER_BLOCK 256
 #define BLOCKS_NUM 32
 
-__device__ uint32_t histogram[HISTOGRAM_SIZE];
+__device__ unsigned int histogram[HISTOGRAM_SIZE];
 
-__global__ void spin(uint64_t reps) {
-  __shared__ uint32_t sharedHistogram[HISTOGRAM_SIZE];
+__global__ void spin(unsigned long int reps) {
+  __shared__ unsigned int sharedHistogram[HISTOGRAM_SIZE];
 
   // Init shared memory
   for (int i = threadIdx.x; i < HISTOGRAM_SIZE; i += blockDim.x) {
@@ -17,9 +18,9 @@ __global__ void spin(uint64_t reps) {
   }
   __syncthreads();
 
-  for (uint32_t i = 0; i < reps; i++) {
+  for (unsigned int i = 0; i < reps; i++) {
     __syncthreads();
-    uint32_t t1, t2;
+    unsigned int t1, t2;
     asm volatile("mov.u32 %0, %%clock;" : "=r"(t1)::"memory");
     asm volatile("mov.u32 %0, %%clock;" : "=r"(t2)::"memory");
 
@@ -36,8 +37,8 @@ __global__ void spin(uint64_t reps) {
 }
 
 // Runner
-void runHistogram(uint64_t reps) {
-  uint32_t h_histogram[HISTOGRAM_SIZE] = {0};
+void runHistogram(unsigned long int reps) {
+  unsigned int h_histogram[HISTOGRAM_SIZE] = {0};
 
   int nDevices;
   cudaGetDeviceCount(&nDevices);
@@ -60,13 +61,13 @@ void runHistogram(uint64_t reps) {
     printf("\t# repetitions %d\t", reps);
 
     // Reset (Not sure if this is needed)
-    cudaMemset(histogram, 0, HISTOGRAM_SIZE * sizeof(uint32_t));
+    cudaMemset(histogram, 0, HISTOGRAM_SIZE * sizeof(unsigned int));
 
     // Launch kernel
     spin<<<BLOCKS_NUM, THREADS_PER_BLOCK>>>(reps);
 
     // Copy results back to host
-    cudaMemcpy(h_histogram, histogram, HISTOGRAM_SIZE * sizeof(uint32_t),
+    cudaMemcpy(h_histogram, histogram, HISTOGRAM_SIZE * sizeof(unsigned int),
                cudaMemcpyDeviceToHost);
     
     // Print Results
