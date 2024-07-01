@@ -78,8 +78,9 @@ void runHistogram(unsigned long int reps) {
 }
 
 
-int main(int argc, char* argv) {
-  while ((opt = getopt(argc, argv, "n:")) != -1) {
+int main() {
+  unsigned long int reps;
+  /*while ((opt = getopt(argc, argv, "n:")) != -1) {
     switch (opt) {
       case 'n':
         reps = atoi(optarg);  
@@ -88,7 +89,8 @@ int main(int argc, char* argv) {
         fprintf(stderr, "Usage: %s [-n integer number of repetitions]\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-  }
+  }*/
+  unsigned long int reps = 100000;
   runHistogram(reps);
   return 1;
 }
