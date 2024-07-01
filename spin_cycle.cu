@@ -79,7 +79,6 @@ void runHistogram(unsigned long int reps) {
 
 
 int main() {
-  unsigned long int reps;
   /*while ((opt = getopt(argc, argv, "n:")) != -1) {
     switch (opt) {
       case 'n':
