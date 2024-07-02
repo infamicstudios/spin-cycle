@@ -6,7 +6,7 @@
 #define HISTOGRAM_SIZE 32  // clock values are 32 bit
 #define THREADS_PER_BLOCK 256
 #define BLOCKS_NUM 32
-#define REPS 1000000000
+#define REPS 10000000
 
 __device__ unsigned int histogram[HISTOGRAM_SIZE];
 
@@ -33,14 +33,13 @@ __global__ void spin(unsigned long int reps) {
     // Query clock reg & calc difference
     asm volatile ("mov.u32 %0, %%clock;" : "=r"(t1));
 
-#ifdef DEBUG
-
+/*#ifdef DEBUG
     int churn = 0;
-    for (int i = 0; i < 10000; i++) {
-	churn = churn * i;
+    for (int x = 0; x < 100; x++) {
+	churn = churn * x;
     }
 #endif
-
+*/
     asm volatile ("mov.u32 %0, %%clock;" : "=r"(t2));
 
     diff = t2 - t1;
@@ -49,8 +48,8 @@ __global__ void spin(unsigned long int reps) {
 
 
 #ifdef DEBUG
-    if (tid == 0 && i == 0) {
-      printf("t1: %u, t2: %u, diff: %u, bin: %u\n", t1, t2, diff, bin);
+    if (tid == 0 && i < 10) {
+	printf("Iteration %lu: t1: %u, t2: %u, diff: %u, bin: %u\n", i, t1, t2, diff, bin);
     }
 #endif
 
