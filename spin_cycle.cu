@@ -8,10 +8,13 @@
 #define BLOCKS_NUM 32
 #define REPS 10000000
 
-__device__ unsigned int histogram[HISTOGRAM_SIZE];
+//namespace cg = cooperative_groups;
 
-__global__ void spin(unsigned long int reps) {
-  __shared__ unsigned int sharedHistogram[HISTOGRAM_SIZE];
+//__device__ unsigned int histogram[HISTOGRAM_SIZE];
+
+__global__ void spin(unsigned long int reps, unsigned long long int * d_histogram) {
+  //cg::thread_block block = cg::this_thread_block();
+  __shared__ unsigned long long sharedHistogram[HISTOGRAM_SIZE];
 
   // Init shared memory
   for (int i = threadIdx.x; i < HISTOGRAM_SIZE; i += blockDim.x) {
@@ -42,7 +45,7 @@ __global__ void spin(unsigned long int reps) {
 */
     asm volatile ("mov.u32 %0, %%clock;" : "=r"(t2));
 
-    diff = t2 - t1;
+    diff = (t2 >= t1) ? (t2 - t1) : (0xFFFFFFFF - t1 + t2 + 1);
     // log_2 bining using clz and diff
     bin = __clz(diff);
 
@@ -61,10 +64,11 @@ __global__ void spin(unsigned long int reps) {
   asm volatile("bar.sync 0;");
 
   // Move shared into global mem
-  for (int i = tid; i < HISTOGRAM_SIZE; i += bdim) {
-    unsigned int val = sharedHistogram[i];
-    atomicAdd(&histogram[i], val);
-  }
+	for (int i = tid; i < HISTOGRAM_SIZE; i += bdim) {
+	  unsigned int val = sharedHistogram[i];
+	  atomicAdd(&d_histogram[i], val);
+	}
+
 }
 
 // Runner
@@ -94,21 +98,32 @@ void runHistogram(unsigned long int reps) {
     printf("\t# repetitions %lu\t", reps);
 
     // Reset (Not sure if this is needed)
-    cudaMemset(histogram, 0, HISTOGRAM_SIZE * sizeof(unsigned int));
-
-    // Launch kernel
-    spin<<<BLOCKS_NUM, THREADS_PER_BLOCK>>>(reps);
     cudaDeviceSynchronize();
+    unsigned long long int *d_histogram;
+	cudaMalloc(&d_histogram, HISTOGRAM_SIZE * sizeof(unsigned long long int));
+	cudaMemset(d_histogram, 0, HISTOGRAM_SIZE * sizeof(unsigned long long int));
 
-    // Copy results back to host
-    unsigned int h_histogram[HISTOGRAM_SIZE]; //= {0};
-    cudaMemcpy(h_histogram, histogram, HISTOGRAM_SIZE * sizeof(unsigned int),
-               cudaMemcpyDeviceToHost);
+	// Pass d_histogram to the kernel
+	spin<<<BLOCKS_NUM, THREADS_PER_BLOCK>>>(reps, d_histogram);
+
+	// Copy results back to host
+	unsigned long long int h_histogram[HISTOGRAM_SIZE] = {0};
+	cudaMemcpy(h_histogram, d_histogram, HISTOGRAM_SIZE * sizeof(unsigned long long int), cudaMemcpyDeviceToHost);
+
+	// Free device memory
+	cudaFree(d_histogram);
+
+
 
     // Print Results
+    unsigned long long total = 0;
     for (int i = 0; i < HISTOGRAM_SIZE; i++) {
-      printf("Bin %d: %u\n", i, h_histogram[i]);
+      printf("Bin %d: %llu\n", i, h_histogram[i]);
     }
+
+	printf("Total measurements: %llu\n", total);
+	printf("Expected measurements: %llu\n", (unsigned long long)reps * BLOCKS_NUM * THREADS_PER_BLOCK);
+
   }
 }
 
