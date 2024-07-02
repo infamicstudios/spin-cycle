@@ -7,7 +7,6 @@
 #define THREADS_PER_BLOCK 256
 #define BLOCKS_NUM 32
 #define REPS 100000000
-#define DEBUG
 
 __device__ unsigned int histogram[HISTOGRAM_SIZE];
 
@@ -53,7 +52,7 @@ __global__ void spin(unsigned long int reps) {
     // Atomic add to shared histogram
     asm volatile("atom.shared.add.u32 %0[%1], 1;\n\t"
                  :
-                 : "l"(sharedHistogram), "r"(bin * 4)
+                 : "l"(sharedHistogram), "r"(bin * 4) // bytes->bits
                  : "memory");
   }
 
@@ -114,7 +113,7 @@ void runHistogram(unsigned long int reps) {
   }
 }
 
-int main() {
+int sizeCheck(void) {
   size_t i_size = sizeof(unsigned int);
   size_t l_size = sizeof(unsigned long int);
 
@@ -125,9 +124,14 @@ int main() {
   else if (l_size != 8) {
     printf("Unsigned long int appears to be %u bits on this system, spin_cycle only support 32 bit unsigned long ints. Exiting", l_size);
     return 0;
-  } else {
-    unsigned long int reps = REPS;
-    runHistogram(reps);
-    return 1;
-  }
+  } 
+  return 1;
+}
+
+int main() {
+  if(sizeCheck() != 1) return;
+
+  unsigned long int reps = REPS;
+  runHistogram(reps);
+  return 1;
 }
