@@ -41,7 +41,7 @@ __global__ void spin(unsigned long int reps) {
         :
         : "memory");
 
-    // log_2 bining of diff using clz
+    // log_2 bining using clz and diff
     asm volatile("clz.b32 %0, %1;\n\t" : "=r"(bin) : "r"(diff));
 
 #ifdef DEBUG
@@ -115,7 +115,19 @@ void runHistogram(unsigned long int reps) {
 }
 
 int main() {
-  unsigned long int reps = REPS;
-  runHistogram(reps);
-  return 1;
+  size_t i_size = sizeof(unsigned int);
+  size_t l_size = sizeof(unsigned long int);
+
+  if (i_size != 4) {
+    printf("Unsigned int appears to be %u bits on this system, spin_cycle only support 32 bit unsigned ints. Exiting", i_size);
+    return 0;
+  }
+  else if (l_size != 8) {
+    printf("Unsigned long int appears to be %u bits on this system, spin_cycle only support 32 bit unsigned long ints. Exiting", l_size);
+    return 0;
+  } else {
+    unsigned long int reps = REPS;
+    runHistogram(reps);
+    return 1;
+  }
 }
