@@ -6,7 +6,7 @@
 #define HISTOGRAM_SIZE 32  // clock values are 32 bit
 #define THREADS_PER_BLOCK 256
 #define BLOCKS_NUM 32
-#define REPS 100000000
+#define REPS 1000000000
 
 __device__ unsigned int histogram[HISTOGRAM_SIZE];
 
@@ -22,38 +22,40 @@ __global__ void spin(unsigned long int reps) {
   asm volatile("bar.sync 0;");
 
   unsigned int tid = threadIdx.x;
-  unsigned int bid = blockIdx.x;
   unsigned int bdim = blockDim.x;
 
-  for (unsigned int i = 0; i < reps; i++) {
+  for (unsigned long int i = 0; i < reps; i++) {
     unsigned int t1, t2, diff, bin;
 
     // Sync threads
     asm volatile("bar.sync 0;");
 
     // Query clock reg & calc difference
-    asm volatile(
-        "mov.u32 %0, %%clock;\n\t"
-        "mov.u32 %1, %%clock;\n\t"
-        "sub.u32 %2, %1, %0;\n\t"
-        : "=r"(t1), "=r"(t2), "=r"(diff)
-        :
-        : "memory");
+    asm volatile ("mov.u32 %0, %%clock;" : "=r"(t1));
 
+#ifdef DEBUG
+
+    int churn = 0;
+    for (int i = 0; i < 10000; i++) {
+	churn = churn * i;
+    }
+#endif
+
+    asm volatile ("mov.u32 %0, %%clock;" : "=r"(t2));
+
+    diff = t2 - t1;
     // log_2 bining using clz and diff
-    asm volatile("clz.b32 %0, %1;\n\t" : "=r"(bin) : "r"(diff));
+    bin = __clz(diff);
+
 
 #ifdef DEBUG
     if (tid == 0 && i == 0) {
-      printf("t1: %u, t2: %u, diff: %u\n", t1, t2, diff);
+      printf("t1: %u, t2: %u, diff: %u, bin: %u\n", t1, t2, diff, bin);
     }
 #endif
 
     // Atomic add to shared histogram
-    asm volatile("atom.shared.add.u32 %0[%1], 1;\n\t"
-                 :
-                 : "l"(sharedHistogram), "r"(bin * 4) // bytes->bits
-                 : "memory");
+    atomicAdd(&sharedHistogram[bin], 1);
   }
 
   // Sync threads
@@ -62,16 +64,12 @@ __global__ void spin(unsigned long int reps) {
   // Move shared into global mem
   for (int i = tid; i < HISTOGRAM_SIZE; i += bdim) {
     unsigned int val = sharedHistogram[i];
-    asm volatile("atom.global.add.u32 %0[%1], %2;\n\t"
-                 :
-                 : "l"(histogram), "r"(i * 4), "r"(val)
-                 : "memory");
+    atomicAdd(&histogram[i], val);
   }
 }
 
 // Runner
 void runHistogram(unsigned long int reps) {
-  unsigned int h_histogram[HISTOGRAM_SIZE] = {0};
 
   int nDevices;
   cudaGetDeviceCount(&nDevices);
@@ -94,15 +92,17 @@ void runHistogram(unsigned long int reps) {
     // END of copied code
     printf("\t# Blocks (hardcoded) %d\n", BLOCKS_NUM);
     printf("\t# Threads per block (hardcoded) %d\t", THREADS_PER_BLOCK);
-    printf("\t# repetitions %d\t", reps);
+    printf("\t# repetitions %lu\t", reps);
 
     // Reset (Not sure if this is needed)
     cudaMemset(histogram, 0, HISTOGRAM_SIZE * sizeof(unsigned int));
 
     // Launch kernel
     spin<<<BLOCKS_NUM, THREADS_PER_BLOCK>>>(reps);
+    cudaDeviceSynchronize();
 
     // Copy results back to host
+    unsigned int h_histogram[HISTOGRAM_SIZE]; //= {0};
     cudaMemcpy(h_histogram, histogram, HISTOGRAM_SIZE * sizeof(unsigned int),
                cudaMemcpyDeviceToHost);
 
@@ -118,11 +118,11 @@ int sizeCheck(void) {
   size_t l_size = sizeof(unsigned long int);
 
   if (i_size != 4) {
-    printf("Unsigned int appears to be %u bits on this system, spin_cycle only support 32 bit unsigned ints. Exiting", i_size);
+    printf("Unsigned int appears to be %zu bits on this system, spin_cycle only support 32 bit unsigned ints. Exiting", i_size);
     return 0;
   }
   else if (l_size != 8) {
-    printf("Unsigned long int appears to be %u bits on this system, spin_cycle only support 32 bit unsigned long ints. Exiting", l_size);
+    printf("Unsigned long int appears to be %zu bits on this system, spin_cycle only support 32 bit unsigned long ints. Exiting", l_size);
     return 0;
   } 
   return 1;
