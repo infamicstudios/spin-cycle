@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <unistd.h>
 
-#define HISTOGRAM_SIZE 32  // clock values are 32 bit
+#define HISTOGRAM_SIZE 16
 #define THREADS_PER_BLOCK 256
 #define BLOCKS_NUM 32
 #define REPS 10000000
@@ -24,7 +24,8 @@ __global__ void spin(unsigned long long int reps,
   }
 
   // Sync threads
-  asm volatile("bar.sync 0;");
+  //asm volatile("bar.sync 0;");
+  //__syncthreads();
 
   unsigned int tid = threadIdx.x;
   unsigned int bdim = blockDim.x;
@@ -55,8 +56,10 @@ __global__ void spin(unsigned long long int reps,
     diff = (t2 >= t1) ? (t2 - t1) : (0xFFFFFFFF - t1 + t2 + 1);
     
     //bin = (diff >> 28) & 0xF;
+    //bin = diff & 0xF;
+    bin = diff;
 
-    bin = __clz(diff);
+    //bin = __clz(diff);
 
 #ifdef DEBUG
     // Print a few samples
@@ -69,6 +72,7 @@ __global__ void spin(unsigned long long int reps,
     atomicAdd(&sharedHistogram[bin], 1ULL);
   }
 
+  //__syncthreads();
   //asm volatile("bar.sync 0;");
 
   // Move shared histogram into global histogram
@@ -110,6 +114,8 @@ void runHistogram(unsigned long long int reps) {
 
     // Pass d_histogram to the kernel
     spin<<<BLOCKS_NUM, THREADS_PER_BLOCK>>>(reps, d_histogram);
+    
+    cudaDeviceSynchronize();
 
     // Copy results back to host
     unsigned long long int h_histogram[HISTOGRAM_SIZE] = {0};
@@ -130,7 +136,9 @@ void runHistogram(unsigned long long int reps) {
     printf("Total measurements: %llu\n", total);
     printf("Expected measurements: %llu\n",
            (unsigned long long)reps * BLOCKS_NUM * THREADS_PER_BLOCK);
+    break;
   }
+  cudaDeviceReset();
 }
 
 int systemConfigValidation(void) {
