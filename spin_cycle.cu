@@ -32,7 +32,7 @@ __global__ void spin(unsigned long long int reps,
   for (unsigned long long int i = 0; i < reps; i++) {
     unsigned int t1, t2, diff, bin;
 
-    asm volatile("bar.sync 0;");
+    //asm volatile("bar.sync 0;");
     asm volatile("mov.u32 %0, %%clock;" : "=r"(t1));
 
 #ifdef DEBUG
@@ -48,11 +48,14 @@ __global__ void spin(unsigned long long int reps,
     }
 #endif
 
-    asm volatile("bar.sync 0;");
+    //asm volatile("bar.sync 0;");
     asm volatile("mov.u32 %0, %%clock;" : "=r"(t2));
 
     // Calc Clock delta and log_2 bin using clz
     diff = (t2 >= t1) ? (t2 - t1) : (0xFFFFFFFF - t1 + t2 + 1);
+    
+    //bin = (diff >> 28) & 0xF;
+
     bin = __clz(diff);
 
 #ifdef DEBUG
@@ -66,7 +69,7 @@ __global__ void spin(unsigned long long int reps,
     atomicAdd(&sharedHistogram[bin], 1ULL);
   }
 
-  asm volatile("bar.sync 0;");
+  //asm volatile("bar.sync 0;");
 
   // Move shared histogram into global histogram
   for (int i = tid; i < HISTOGRAM_SIZE; i += bdim) {
@@ -96,8 +99,8 @@ void runHistogram(unsigned long long int reps) {
            2.0 * prop.memoryClockRate * (prop.memoryBusWidth / 8) / 1.0e6);
     // END of copied code
     printf("\t# Blocks (hardcoded) %d\n", BLOCKS_NUM);
-    printf("\t# Threads per block (hardcoded) %d\t", THREADS_PER_BLOCK);
-    printf("\t# repetitions %llu\t", reps);
+    printf("\t# Threads per block (hardcoded) %d\n", THREADS_PER_BLOCK);
+    printf("\t# repetitions %llu\n", reps);
 
     cudaDeviceSynchronize();
 
