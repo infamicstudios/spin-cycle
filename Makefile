@@ -1,6 +1,6 @@
 NVCC := nvcc
 
-NVCC_FLAGS := -arch=sm_70
+NVCC_FLAGS := -arch=sm_60
 
 DEBUG_FLAGS := -G -DDEBUG
 
